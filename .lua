@@ -1,771 +1,835 @@
---[[
-Universal Aimbot v1.1.23 – Vollständig (950+ Zeilen), 250 Studs Max + Min 0
-- Q toggelt Aimbot + FOV-Kreis (nur Ziele im Kreis + max 250 Studs)
-- K toggelt AimAssist
-- ESP permanent + togglebar im Hub
-- Smoothness startet bei 5
-- Kreis immer am Mauszeiger
-- Hub lädt garantiert rechts oben
-- MinAimDistance = 0 (zielst auf ALLE, auch nah dran)
-]]
+-- // GiG AIM) + Universal Aimbot (Q Toggle Only) //
 
-local VERSION = "v1.1.23 - Full + 250 Max Only"
+-- // Configuration //
 
-if not getgenv().AimbotSettings then
-    getgenv().AimbotSettings = {
-        TeamCheck = true,
-        VisibleCheck = true,
-        IgnoreTransparency = true,
-        IgnoredTransparency = 0.5,
-        RefreshRate = 10,
-        Keybind = "MouseButton2",
-        ToggleKey = "RightShift",
-        MaximumDistance = 250,          -- Obergrenze 250 Studs
-        MinAimDistance = 0,             -- 0 = zielst auf ALLE (kein Nahbereich-Ignore)
-        AlwaysActive = false,
-        Aimbot = {
-            Enabled = false,
-            TargetPart = "Head",
-            Use_mousemoverel = true,
-            Strength = 5,               -- Startwert 5
-            AimType = "Toggle",
-            AimAtNearestPart = false
-        },
-        AimAssist = {
-            Enabled = false,
-            MinFov = 15,
-            MaxFov = 80,
-            DynamicFov = true,
-            ShowFov = false,
-            Strength = 55,
-            SlowSensitivity = true,
-            SlowFactor = 1.75,
-            RequireMovement = true
-        },
-        FovCircle = {
-            Enabled = true,
-            Dynamic = true,
-            Radius = 120,
-            Transparency = 0.7,
-            Color = Color3.fromRGB(255,255,255),
-            NumSides = 100,
-        },
-        TriggerBot = {
-            Enabled = false,
-            Delay = 60,
-            Spam = true,
-            ClicksPerSecond = 10,
-            UseKeybind = false,
-        },
-        Crosshair = {
-            Enabled = false,
-            Transparency = 1,
-            TransparencyKeybind = 1,
-            Color = Color3.fromRGB(255, 0, 0),
-            RainbowColor = false,
-            Length = 15,
-            Thickness = 2,
-            Offset = 0
-        },
-        Prediction = {
-            Enabled = false,
-            Strength = 2
-        },
-        Priority = {},
-        Whitelisted = {},
-        WhitelistFriends = true,
-        Ignore = {}
-    }
-end
+local LibraryUrl = "https://raw.githubusercontent.com/Vovabro46/trash/refs/heads/main/Test.lua"
+local Success, Library = pcall(function()
+    return loadstring(game:HttpGet(LibraryUrl))()
+end)
 
-if not AimbotSettings.IgnoredTransparency then
-    local bind = Instance.new("BindableFunction")
-    bind.OnInvoke = function()
-        setclipboard("https://pastebin.com/raw/nwqE7v07")
-    end
-    game:GetService("StarterGui"):SetCore("SendNotification",{
-        Title = "Universal Aimbot",
-        Text = "Please update your script!",
-        Duration = 5,
-        Button1 = "Get Latest Script",
-        Callback = bind
-    })
+if not Success or not Library then
+    print("Failed to load library")
     return
 end
 
-local players = game:GetService("Players")
-local player = players.LocalPlayer
-local camera = workspace.CurrentCamera
-local uis = game:GetService("UserInputService")
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local mousemoverel = mousemoverel
-local mouse1press = mouse1press or mouse1down
-local mouse1release = mouse1release or mouse1up
-local Drawingnew = Drawing.new
-local Fonts = Drawing.Fonts
-local tableinsert = table.insert
-local WorldToViewportPoint = camera.WorldToViewportPoint
-local CFramenew = CFrame.new
-local Vector2new = Vector2.new
-local fromRGB = Color3.fromRGB
-local fromHSV = Color3.fromHSV
-local mathfloor = math.floor
-local mathclamp = math.clamp
-local mathhuge = math.huge
-local lower = string.lower
-local mouse = uis:GetMouseLocation()
-local osclock = os.clock
-local RaycastParamsnew = RaycastParams.new
-local taskwait = task.wait
-local taskspawn = task.spawn
-local GameId = game.GameId
-local ss = getgenv().AimbotSettings
-local Aimbot = ss.Aimbot
-local AimAssist = ss.AimAssist
-local FovCircle = ss.FovCircle
-local Trigger = ss.TriggerBot
-local Mouse = player:GetMouse()
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
 
--- ESP
-local esp_active = true
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
 
-local function addESP(character)
-    if character:FindFirstChild("ESPBox") then return end
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "ESPBox"
-    highlight.FillTransparency = 1
-    highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
-    highlight.OutlineTransparency = 0
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Enabled = esp_active
-    highlight.Adornee = character
-    highlight.Parent = character
-end
+-- // ESP Settings //
 
-for _, other in pairs(players:GetPlayers()) do
-    if other ~= player then
-        if other.Character then addESP(other.Character) end
-        other.CharacterAdded:Connect(addESP)
-    end
-end
+local ESP_Settings = {
+    Enabled = false,
+    LimitDistance = 2000,
+    TeamCheck = false,
+    TextSize = 13,
+    Font = 2,
 
-players.PlayerAdded:Connect(function(other)
-    other.CharacterAdded:Connect(addESP)
-end)
+    Box = { Enabled = false, Color = Color3.fromRGB(255, 255, 255), Outline = true, Thickness = 1 },
+    BoxFill = { Enabled = false, Color = Color3.fromRGB(255, 255, 255), Transparency = 0.5 },
+    Name = { Enabled = false, Color = Color3.fromRGB(255, 255, 255) },
+    Distance = { Enabled = false, Color = Color3.fromRGB(200, 200, 200) },
+    HealthBar = { Enabled = false },
+    Tracer = { Enabled = false, Origin = "Bottom", Color = Color3.fromRGB(255, 255, 255) },
+    Skeleton = { Enabled = false, Color = Color3.fromRGB(255, 255, 255), Thickness = 1 },
 
--- Game-spezifische Ignore
-if GameId == (111958650 or 115797356 or 147332621) then
-    ss.Ignore = {workspace.Ray_Ignore}
-elseif GameId == 833423526 then
-    ss.Ignore = {workspace.IgnoreThese}
-elseif GameId == 1168263273 then
-    do end
-elseif GameId == 2162282815 then
-    ss.Ignore = {camera, player.Character, workspace.RaycastIgnore, workspace.DroppedWeapons, workspace.MapFolder.Map.Ramps, workspace.MapFolder.Map.Walls.MapWalls}
-elseif workspace:FindFirstChild("Ignore") then
-    tableinsert(ss.Ignore, workspace.Ignore)
-elseif workspace:FindFirstChild("RaycastIgnore") then
-    tableinsert(ss.Ignore, workspace.RaycastIgnore)
-end
-
-if UAIM then
-    UAIM:Destroy()
-end
-
-local bodyparts = {
-"Head","UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot",
-"Torso","Left Arm","Right Arm","Left Leg","Right Leg",
-"Chest","Hips","LeftArm","LeftForearm","RightArm","RightForearm","LeftLeg","LeftForeleg","RightLeg","RightForeleg"
+    Chams = { 
+        Enabled = false, 
+        FillColor = Color3.fromRGB(255, 0, 0), 
+        OutlineColor = Color3.fromRGB(255, 255, 255),
+        FillTransparency = 0.5,
+        OutlineTransparency = 0
+    }
 }
 
-local ads = false
-local aimassist_active = false
-local olddelta = uis.MouseDeltaSensitivity
-local triggering = false
-local mousedown = false
-local Ignore = {camera}
+-- // Aimbot Settings (Universal Aimbot Style) //
 
-local gids = {
-['arsenal'] = 111958650,
-['pf'] = 113491250,
-['pft'] = 115272207,
-['pfu'] = 1256867479,
-['bb'] = 1168263273,
-['rp'] = 2162282815,
-['mm2'] = 66654135
+local AimbotSettings = {
+    Enabled = false,
+    TeamCheck = false,
+    VisibleCheck = false,
+    AimPart = "Head",
+    FOV = 160,
+    FOV_Color = Color3.fromRGB(255, 255, 255),  -- Weiß
+    Smoothness = 10,
+    Prediction = false,
+    PredictionAmount = 0.142,
+    MaximumDistance = 250,
+    Strength = 5,
 }
 
-local getEntry, raycast, ts, characters, teams, rp
+-- // ESP Cache //
 
-if (GameId == gids.pf) or (GameId == gids.pft) or (GameId == gids.pfu) then
-    local require = rawget(getrenv().shared, "require")
-    if require == nil then
-        setclipboard('loadstring(game:HttpGet("https://raw.githubusercontent.com/Spoorloos/scripts/main/pf-actor-bypass.lua"))()')
-        local a = Instance.new("Message", game.CoreGui)
-        a.Text = "-- Universal Aimbot Notice --\n\nA script has been copied to your clipboard.\nPlease put this script in your exploit's autoexec folder and rejoin the game.\n(this script is required to bypass the new update)\n\nbypass was created by Spoorloos"
-        return
+local ESP_Cache = {}
+
+-- // Drawing Functions //
+
+local function NewDrawing(Type, Properties)
+    local Obj = Drawing.new(Type)
+    for k, v in pairs(Properties) do 
+        pcall(function() Obj[k] = v end)
     end
-    local _cache = rawget(debug.getupvalue(require, 1), "_cache")
-    local ReplicationInterface = rawget(rawget(_cache, "ReplicationInterface"), "module")
-    getEntry = rawget(ReplicationInterface, "getEntry")
-elseif GameId == gids.bb then
-    for _,v in next, getgc(true) do
-        if typeof(v) == "table" and rawget(v, "InitProjectile") and rawget(v, "TS") then
-            ts = rawget(v, "TS")
-            characters = ts.Characters
-            teams = ts.Teams
+    return Obj
+end
+
+-- // Create ESP //
+
+local function CreateESP(Player)
+    if Player == LocalPlayer then return end
+    
+    local Objects = {
+        Box = NewDrawing("Square", {Thickness = 1, ZIndex = 2, Visible = false}),
+        BoxOutline = NewDrawing("Square", {Thickness = 3, Color = Color3.new(0,0,0), ZIndex = 1, Visible = false}),
+        BoxFill = NewDrawing("Square", {Filled = true, ZIndex = 0, Visible = false}),
+        Name = NewDrawing("Text", {Text = Player.Name, Center = true, Size = ESP_Settings.TextSize, Font = ESP_Settings.Font, Outline = true, ZIndex = 3, Visible = false}),
+        Distance = NewDrawing("Text", {Center = true, Size = ESP_Settings.TextSize - 1, Font = ESP_Settings.Font, Outline = true, ZIndex = 3, Visible = false}),
+        HealthBar = NewDrawing("Square", {Filled = true, ZIndex = 2, Visible = false}),
+        HealthBarOutline = NewDrawing("Square", {Filled = true, Color = Color3.new(0,0,0), ZIndex = 1, Visible = false}),
+        Tracer = NewDrawing("Line", {Thickness = 1, ZIndex = 2, Visible = false}),
+        TracerOutline = NewDrawing("Line", {Thickness = 3, Color = Color3.new(0,0,0), ZIndex = 1, Visible = false}),
+        SkeletonLines = {},
+        Highlight = nil
+    }
+
+    for i = 1, 16 do
+        table.insert(Objects.SkeletonLines, NewDrawing("Line", {Thickness = 1, ZIndex = 2, Visible = false}))
+    end
+
+    ESP_Cache[Player] = Objects
+end
+
+-- // Remove ESP //
+
+local function RemoveESP(Player)
+    if ESP_Cache[Player] then
+        for k, v in pairs(ESP_Cache[Player]) do
+            if k == "Highlight" and v then 
+                pcall(function() v:Destroy() end)
+            elseif k == "SkeletonLines" then
+                for _, line in pairs(v) do 
+                    pcall(function() line:Remove() end)
+                end
+            elseif v and v.Remove then 
+                pcall(function() v:Remove() end)
+            end
         end
+        ESP_Cache[Player] = nil
     end
-elseif GameId == gids.rp then
-    rp = true
 end
 
-local rootpart = (getchar and "Torso") or (ts and "Chest") or "HumanoidRootPart"
+-- // Skeleton Connections //
 
-local setidentity = setidentity or setthreadidentity or set_thread_identity or setthreadcontext or set_thread_context or (syn and syn.set_thread_identity) or nil
+local SkeletonConnections = {
+    {"Head", "UpperTorso"},
+    {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"}
+}
 
-function safecall(func, env, ...)
-    if not setidentity then
-        return func(...)
-    end
-    local suc, env = pcall(getsenv, env)
-    return coroutine.wrap(function(...)
-        setidentity(2)
-        if suc then
-            setfenv(0, env)
-            setfenv(1, env)
-        end
-        return func(...)
-    end)(...)
-end
+-- // ESP Render Loop //
 
-local oldfuncs = {}
+RunService.RenderStepped:Connect(function()
+    for Player, Objects in pairs(ESP_Cache) do
+        if not Player or not Player.Character then continue end
+        
+        local Character = Player.Character
+        local Humanoid = Character:FindFirstChild("Humanoid")
+        local RootPart = Character:FindFirstChild("HumanoidRootPart")
+        
+        local IsValid = ESP_Settings.Enabled and Character and Humanoid and RootPart and Humanoid.Health > 0
+        local IsTeammate = ESP_Settings.TeamCheck and Player.Team == LocalPlayer.Team
+        
+        if IsValid and not IsTeammate then
+            local HRP_Pos, OnScreen = Camera:WorldToViewportPoint(RootPart.Position)
+            local Dist = (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")) and 
+                        (LocalPlayer.Character.HumanoidRootPart.Position - RootPart.Position).Magnitude or 0
 
-function IsAlive(plr)
-    local char = plr.Character
-    local humanoid = char and char:FindFirstChild("Humanoid")
-    if humanoid and humanoid.Health > 0 then
-        return char
-    end
-    return false
-end
+            -- // Chams //
 
-function GetChar(plr)
-    return plr.Character
-end
-
-function GetTeam(plr)
-    return plr.Team
-end
-
-function IsFFA()
-    local t = {}
-    for _,v in next, players:GetPlayers() do
-        local team = GetTeam(v)
-        if team == nil then
-            return true
-        end
-        team = team.Name or team
-        if t[team] then
-            return true
-        else
-            tableinsert(t, team)
-        end
-    end
-    return #t == 1
-end
-
-function ClosestPlayer()
-    mouse = uis:GetMouseLocation()
-    local plr = nil
-    local closest = math.huge
-    local myteam = GetTeam(player)
-    for _,v in next, ss.Priority do
-        v = players:FindFirstChild(v)
-        if v and IsAlive(v) and InFov(v) then
-            return v
-        end
-    end
-    for _,v in next, players:GetPlayers() do
-        if v ~= player then
-            local char = GetChar(v)
-            if char ~= nil then
-                local cf = char:GetPivot()
-                local vector, inViewport = WorldToViewportPoint(camera, cf.Position)
-                if inViewport then
-                    local mag = (Vector2new(mouse.X, mouse.Y) - Vector2new(vector.X, vector.Y)).Magnitude
-                    local team = GetTeam(v)
-                    if mag < closest and ((team ~= nil and team ~= myteam) or team == nil or not ss.TeamCheck) then
-                        plr = v
-                        closest = mag
+            if ESP_Settings.Chams.Enabled then
+                if not Objects.Highlight or Objects.Highlight.Parent ~= Character then
+                    if Objects.Highlight then 
+                        pcall(function() Objects.Highlight:Destroy() end)
                     end
+                    local HL = Instance.new("Highlight")
+                    HL.Parent = Character
+                    HL.Adornee = Character
+                    HL.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                    Objects.Highlight = HL
+                end
+                local HL = Objects.Highlight
+                HL.FillColor = ESP_Settings.Chams.FillColor
+                HL.OutlineColor = ESP_Settings.Chams.OutlineColor
+                HL.FillTransparency = ESP_Settings.Chams.FillTransparency
+                HL.OutlineTransparency = ESP_Settings.Chams.OutlineTransparency
+                HL.Enabled = true
+            else
+                if Objects.Highlight then 
+                    pcall(function() Objects.Highlight:Destroy() end)
+                    Objects.Highlight = nil 
                 end
             end
-        end
-    end
-    return plr
-end
 
-local params = RaycastParamsnew()
-params.FilterType = Enum.RaycastFilterType.Blacklist
-params.IgnoreWater = true
+            if OnScreen and Dist <= ESP_Settings.LimitDistance then
+                local ScaleFactor = 1 / (HRP_Pos.Z * math.tan(math.rad(Camera.FieldOfView * 0.5)) * 2) * 1000
+                local Width, Height = math.floor(4 * ScaleFactor), math.floor(6 * ScaleFactor)
+                local BoxPos = Vector2.new(math.floor(HRP_Pos.X - Width * 0.5), math.floor(HRP_Pos.Y - Height * 0.5))
 
-function IsVisible(plr, character, mycharacter, cf, targetpos, valid)
-    local char = character or GetChar(plr)
-    if ss.VisibleCheck and (valid or IsAlive(plr) and char:FindFirstChild(Aimbot.TargetPart)) then
-        local mychar = mycharacter or GetChar(player)
-        tableinsert(Ignore, mychar)
-        params.FilterDescendantsInstances = Ignore
-        local cf = cf or camera.CFrame.Position
-        local targetpos = targetpos or char[Aimbot.TargetPart].Position
-        local result = workspace:Raycast(cf, (targetpos - cf).Unit * 500, params)
-        if result then
-            local ins = result.Instance
-            local isdes = ins:IsDescendantOf(char)
-            local model = ins:FindFirstAncestorOfClass("Model")
-            if ss.IgnoreTransparency then
-                if ins.Transparency > ss.IgnoredTransparency and not (model ~= nil and model:FindFirstChildOfClass("Humanoid")) and not isdes then
-                    tableinsert(Ignore, ins)
-                    return IsVisible(plr, char, mychar, cf, targetpos, true)
-                elseif isdes then
-                    return true
+                -- // Box //
+
+                if ESP_Settings.Box.Enabled then
+                    Objects.Box.Size = Vector2.new(Width, Height)
+                    Objects.Box.Position = BoxPos
+                    Objects.Box.Color = ESP_Settings.Box.Color
+                    Objects.Box.Thickness = ESP_Settings.Box.Thickness or 1
+                    Objects.Box.Visible = true
+                    Objects.BoxOutline.Size = Vector2.new(Width, Height)
+                    Objects.BoxOutline.Position = BoxPos
+                    Objects.BoxOutline.Visible = ESP_Settings.Box.Outline
+                else
+                    Objects.Box.Visible = false
+                    Objects.BoxOutline.Visible = false
                 end
-            elseif isdes then
-                return true
-            end
-        end
-    elseif not ss.VisibleCheck and IsAlive(plr) then
-        return true
-    end
-    return false
-end
 
-task.spawn(function()
-    while true do
-        if ss ~= nil and typeof(ss.Ignore) == "table" then
-            for _,v in next, ss.Ignore do
-                tableinsert(Ignore, v)
-            end
-        end
-        taskwait(3)
-    end
-end)
+                -- // Box Fill //
 
-local fov
+                if ESP_Settings.BoxFill.Enabled and ESP_Settings.Box.Enabled then
+                    Objects.BoxFill.Size = Vector2.new(Width, Height)
+                    Objects.BoxFill.Position = BoxPos
+                    Objects.BoxFill.Color = ESP_Settings.BoxFill.Color
+                    Objects.BoxFill.Transparency = ESP_Settings.BoxFill.Transparency
+                    Objects.BoxFill.Visible = true
+                else
+                    Objects.BoxFill.Visible = false
+                end
 
-function InFov(plr,Fov)
-    mouse = uis:GetMouseLocation()
-    if IsAlive(plr) then
-        local char = GetChar(plr)
-        if ts and char:FindFirstChild("Body") then
-            char = char.Body
-        end
-        local target = char:FindFirstChild(Aimbot.TargetPart)
-        if target then
-            local _, inViewport = WorldToViewportPoint(camera, target.Position)
-            if (FovCircle.Enabled or AimAssist.Enabled) and inViewport then
-                for _,v in next, char:GetChildren() do
-                    if table.find(bodyparts, v.Name) and v.ClassName:find("Part") then
-                        local vector2, inViewport2 = WorldToViewportPoint(camera, v.Position)
-                        if inViewport2 and (Vector2new(mouse.X, mouse.Y) - Vector2new(vector2.X, vector2.Y)).Magnitude <= (Fov or fov.Radius or FovCircle.Radius) then
-                            return true
+                -- // Name //
+
+                if ESP_Settings.Name.Enabled then
+                    Objects.Name.Position = Vector2.new(BoxPos.X + Width / 2, BoxPos.Y - Objects.Name.TextBounds.Y - 2)
+                    Objects.Name.Color = ESP_Settings.Name.Color
+                    Objects.Name.Visible = true
+                else
+                    Objects.Name.Visible = false
+                end
+
+                -- // Distance //
+
+                if ESP_Settings.Distance.Enabled then
+                    Objects.Distance.Text = math.floor(Dist) .. "m"
+                    Objects.Distance.Position = Vector2.new(BoxPos.X + Width / 2, BoxPos.Y + Height + 2)
+                    Objects.Distance.Color = ESP_Settings.Distance.Color
+                    Objects.Distance.Visible = true
+                else
+                    Objects.Distance.Visible = false
+                end
+
+                -- // Health Bar //
+
+                if ESP_Settings.HealthBar.Enabled then
+                    local BarWidth = 2
+                    local HealthY = Height * (Humanoid.Health / Humanoid.MaxHealth)
+                    Objects.HealthBarOutline.Size = Vector2.new(BarWidth + 2, Height + 2)
+                    Objects.HealthBarOutline.Position = Vector2.new(BoxPos.X - BarWidth - 6, BoxPos.Y - 1)
+                    Objects.HealthBarOutline.Visible = true
+                    Objects.HealthBar.Size = Vector2.new(BarWidth, HealthY)
+                    Objects.HealthBar.Position = Vector2.new(BoxPos.X - BarWidth - 5, BoxPos.Y + (Height - HealthY))
+                    Objects.HealthBar.Color = Color3.fromHSV((Humanoid.Health / Humanoid.MaxHealth) * 0.3, 1, 1)
+                    Objects.HealthBar.Visible = true
+                else
+                    Objects.HealthBar.Visible = false
+                    Objects.HealthBarOutline.Visible = false
+                end
+
+                -- // Tracer //
+
+                if ESP_Settings.Tracer.Enabled then
+                    local Origin = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                    if ESP_Settings.Tracer.Origin == "Center" then 
+                        Origin = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+                    elseif ESP_Settings.Tracer.Origin == "Mouse" then 
+                        local M = UserInputService:GetMouseLocation() 
+                        Origin = Vector2.new(M.X, M.Y) 
+                    end
+                    Objects.Tracer.From = Origin
+                    Objects.Tracer.To = Vector2.new(HRP_Pos.X, HRP_Pos.Y)
+                    Objects.Tracer.Color = ESP_Settings.Tracer.Color
+                    Objects.Tracer.Visible = true
+                    Objects.TracerOutline.From = Origin
+                    Objects.TracerOutline.To = Vector2.new(HRP_Pos.X, HRP_Pos.Y)
+                    Objects.TracerOutline.Visible = true
+                else
+                    Objects.Tracer.Visible = false
+                    Objects.TracerOutline.Visible = false
+                end
+
+                -- // Skeleton //
+
+                if ESP_Settings.Skeleton.Enabled then
+                    local lineIndex = 1
+                    for _, pair in ipairs(SkeletonConnections) do
+                        local p1 = Character:FindFirstChild(pair[1])
+                        local p2 = Character:FindFirstChild(pair[2])
+                        
+                        if p1 and p2 then
+                            local pos1, onScreen1 = Camera:WorldToViewportPoint(p1.Position)
+                            local pos2, onScreen2 = Camera:WorldToViewportPoint(p2.Position)
+
+                            if onScreen1 or onScreen2 then
+                                local line = Objects.SkeletonLines[lineIndex]
+                                if line then
+                                    line.From = Vector2.new(pos1.X, pos1.Y)
+                                    line.To = Vector2.new(pos2.X, pos2.Y)
+                                    line.Color = ESP_Settings.Skeleton.Color
+                                    line.Thickness = ESP_Settings.Skeleton.Thickness
+                                    line.Visible = true
+                                    lineIndex = lineIndex + 1
+                                end
+                            end
                         end
                     end
+                    for i = lineIndex, #Objects.SkeletonLines do
+                        Objects.SkeletonLines[i].Visible = false
+                    end
+                else
+                    for _, line in pairs(Objects.SkeletonLines) do 
+                        line.Visible = false 
+                    end
                 end
-            elseif not FovCircle.Enabled and IsAlive(plr) then
-                return true
+
+            else
+                for k, v in pairs(Objects) do 
+                    if k == "SkeletonLines" then 
+                        for _, l in pairs(v) do l.Visible = false end
+                    elseif typeof(v) ~= "Instance" and v.Visible ~= nil then 
+                        v.Visible = false 
+                    end
+                end
             end
         else
-            return false
-        end
-    end
-    return false
-end
-
-do
-    if getEntry then
-        local playercache = {}
-        local function GetPlayerObject(plr)
-            local cached = playercache[plr]
-            if cached then return cached end
-            local obj = getEntry(plr)
-            playercache[plr] = obj
-            return obj
-        end
-        GetChar = function(plr)
-            if plr == player then return nil end
-            local obj = GetPlayerObject(plr)
-            if obj ~= nil then
-                local thirdPersonObject = obj._thirdPersonObject
-                if thirdPersonObject then
-                    return thirdPersonObject:getCharacterHash().head.Parent
+            for k, v in pairs(Objects) do 
+                if k == "SkeletonLines" then 
+                    for _, l in pairs(v) do l.Visible = false end
+                elseif typeof(v) ~= "Instance" and v.Visible ~= nil then 
+                    v.Visible = false 
                 end
             end
-            return nil
-        end
-        IsAlive = GetChar
-    end
-    if ts then
-        hookfunction(PluginManager, error)
-        GetChar = function(plr)
-            return characters:GetCharacter(plr)
-        end
-        IsAlive = GetChar
-        GetTeam = function(plr)
-            return teams:GetPlayerTeam(plr, plr)
-        end
-    end
-    if GameId == gids.arsenal then
-        local ffa = game:GetService("ReplicatedStorage"):WaitForChild("wkspc"):WaitForChild("FFA")
-        IsFFA = function()
-            return ffa.Value
-        end
-    end
-    if rp then
-        local mapfolder = workspace:WaitForChild("MapFolder")
-        local playerfolder = mapfolder:WaitForChild("Players")
-        local gamestats = mapfolder:WaitForChild("GameStats")
-        GetChar = function(plr)
-            return playerfolder:FindFirstChild(plr.Name)
-        end
-        IsAlive = GetChar
-        GetTeam = function(plr)
-            local char = GetChar(plr) if not char then return "" end
-            local team = char:FindFirstChild("Team") if not team then return "" end
-            return team.Value
-        end
-        IsFFA = function()
-            return gamestats.GameMode.Value == "Deathmatch"
-        end
-    end
-    if GameId == gids.mm2 then
-        local sheriff = nil
-        local murderer = nil
-        GetTeam = function(plr)
-            local backpack = plr.Backpack
-            local char = GetChar(plr)
-            if (backpack and backpack:FindFirstChild("Gun")) or (char and char:FindFirstChild("Gun")) then
-                sheriff = plr
-                return "Sheriff"
-            elseif (backpack and backpack:FindFirstChild("Knife")) or (char and char:FindFirstChild("Knife")) then
-                murderer = plr
-                return "Murderer"
+            if Objects.Highlight then 
+                pcall(function() Objects.Highlight:Destroy() end)
+                Objects.Highlight = nil 
             end
-            return sheriff == player and "Sheriff" or "Innocent"
-        end
-    end
-end
-
-oldfuncs.alive = IsAlive
-oldfuncs.character = GetChar
-oldfuncs.team = GetTeam
-oldfuncs.ffa = IsFFA
-oldfuncs.closest = ClosestPlayer
-oldfuncs.visible = IsVisible
-oldfuncs.fov = InFov
-
-function IsWhitelisted(plr)
-    if table.find(ss.Whitelisted, (plr.Name or plr.UserId)) then
-        return true
-    end
-    return false
-end
-
-local uit = Enum.UserInputType
-local kc = Enum.KeyCode
-local mb1 = uit.MouseButton1
-
--- INPUT-HANDLING: Q → Aimbot, K → AimAssist
-local conn1 = uis.InputBegan:Connect(function(i, gp)
-    if gp then return end
-    if i.KeyCode == Enum.KeyCode.Q then
-        ads = not ads
-        Aimbot.Enabled = ads
-        fov.Visible = ads and FovCircle.Enabled or false
-        
-        game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
-            Text = "[Aimbot] " .. (ads and "aktiviert" or "deaktiviert") .. " (Q)",
-            Color = ads and Color3.fromRGB(100,255,100) or Color3.fromRGB(255,100,100)
-        })
-    end
-    if i.KeyCode == Enum.KeyCode.K then
-        aimassist_active = not aimassist_active
-        AimAssist.Enabled = aimassist_active
-        
-        game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
-            Text = "[AimAssist] " .. (aimassist_active and "aktiviert" or "deaktiviert") .. " (K)",
-            Color = aimassist_active and Color3.fromRGB(100,200,255) or Color3.fromRGB(200,150,255)
-        })
-    end
-    if i.UserInputType == mb1 then
-        mousedown = true
-    end
-end)
-
-local conn2 = uis.InputEnded:Connect(function(i, gp)
-    if gp then return end
-    if i.UserInputType == mb1 then
-        mousedown = false
-    end
-end)
-
-fov = Drawingnew("Circle")
-fov.Visible = false
-fov.Transparency = 1
-fov.Color = fromRGB(255,255,255)
-fov.Thickness = 2
-fov.NumSides = 100
-fov.Radius = FovCircle.Radius
-fov.Filled = false
-
--- Kreis immer am Mauszeiger
-RunService.RenderStepped:Connect(function()
-    fov.Position = uis:GetMouseLocation()
-end)
-
--- Moderner Hub – garantiert laden
-local gui = Instance.new("ScreenGui")
-gui.Name = "AimbotHubFixed"
-gui.ResetOnSpawn = false
-gui.Enabled = true
-gui.IgnoreGuiInset = true
-gui.Parent = game.CoreGui
-
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 260, 0, 320)
-mainFrame.Position = UDim2.new(1, -280, 0, 20)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-mainFrame.BorderSizePixel = 0
-mainFrame.Parent = gui
-
-local uiCorner = Instance.new("UICorner")
-uiCorner.CornerRadius = UDim.new(0, 16)
-uiCorner.Parent = mainFrame
-
-local uiStroke = Instance.new("UIStroke")
-uiStroke.Color = Color3.fromRGB(60, 60, 90)
-uiStroke.Thickness = 1.5
-uiStroke.Transparency = 0.5
-uiStroke.Parent = mainFrame
-
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 45)
-titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
-titleBar.BorderSizePixel = 0
-titleBar.Parent = mainFrame
-
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 16)
-titleCorner.Parent = titleBar
-
-local titleText = Instance.new("TextLabel")
-titleText.Size = UDim2.new(1, -50, 1, 0)
-titleText.Position = UDim2.new(0, 15, 0, 0)
-titleText.BackgroundTransparency = 1
-titleText.Text = "Aimbot Hub"
-titleText.TextColor3 = Color3.fromRGB(220, 220, 255)
-titleText.Font = Enum.Font.GothamBlack
-titleText.TextSize = 20
-titleText.TextXAlignment = Enum.TextXAlignment.Left
-titleText.Parent = titleBar
-
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 34, 0, 34)
-closeBtn.Position = UDim2.new(1, -40, 0, 5)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 16
-closeBtn.Parent = titleBar
-
-local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(0, 10)
-closeCorner.Parent = closeBtn
-
-closeBtn.MouseButton1Click:Connect(function()
-    gui.Enabled = false
-end)
-
--- Content
-local content = Instance.new("Frame")
-content.Size = UDim2.new(1, -20, 1, -55)
-content.Position = UDim2.new(0, 10, 0, 45)
-content.BackgroundTransparency = 1
-content.Parent = mainFrame
-
--- ESP Toggle
-local espToggleBtn = Instance.new("TextButton")
-espToggleBtn.Size = UDim2.new(1, 0, 0, 45)
-espToggleBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
-espToggleBtn.Text = "ESP: " .. (esp_active and "AN" or "AUS")
-espToggleBtn.TextColor3 = esp_active and Color3.fromRGB(140, 255, 140) or Color3.fromRGB(255, 140, 140)
-espToggleBtn.Font = Enum.Font.GothamSemibold
-espToggleBtn.TextSize = 16
-espToggleBtn.Parent = content
-
-local espBtnCorner = Instance.new("UICorner")
-espBtnCorner.CornerRadius = UDim.new(0, 10)
-espBtnCorner.Parent = espToggleBtn
-
-espToggleBtn.MouseButton1Click:Connect(function()
-    esp_active = not esp_active
-    espToggleBtn.Text = "ESP: " .. (esp_active and "AN" or "AUS")
-    espToggleBtn.TextColor3 = esp_active and Color3.fromRGB(140, 255, 140) or Color3.fromRGB(255, 140, 140)
-    
-    for _, other in pairs(players:GetPlayers()) do
-        if other ~= player and other.Character then
-            local hl = other.Character:FindFirstChild("ESPBox")
-            if hl then hl.Enabled = esp_active end
         end
     end
 end)
 
--- Smoothness Slider
-local smoothLabel = Instance.new("TextLabel")
-smoothLabel.Size = UDim2.new(1, 0, 0, 25)
-smoothLabel.Position = UDim2.new(0, 0, 0, 60)
-smoothLabel.BackgroundTransparency = 1
-smoothLabel.Text = "Smoothness: " .. Aimbot.Strength
-smoothLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
-smoothLabel.Font = Enum.Font.Gotham
-smoothLabel.TextSize = 15
-smoothLabel.Parent = content
+-- // Player Events //
 
-local smoothSlider = Instance.new("Frame")
-smoothSlider.Size = UDim2.new(1, 0, 0, 12)
-smoothSlider.Position = UDim2.new(0, 0, 0, 90)
-smoothSlider.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-smoothSlider.Parent = content
+Players.PlayerAdded:Connect(CreateESP)
+Players.PlayerRemoving:Connect(RemoveESP)
+for _, Plr in ipairs(Players:GetPlayers()) do 
+    if Plr ~= LocalPlayer then 
+        CreateESP(Plr) 
+    end 
+end
 
-local smoothFill = Instance.new("Frame")
-smoothFill.Size = UDim2.new(Aimbot.Strength / 200, 0, 1, 0)
-smoothFill.BackgroundColor3 = Color3.fromRGB(80, 180, 255)
-smoothFill.Parent = smoothSlider
+-- // FOV Circle (Drawing) - Immer am Mauszeiger //
 
-local smoothCorner = Instance.new("UICorner")
-smoothCorner.CornerRadius = UDim.new(1, 0)
-smoothCorner.Parent = smoothSlider
-smoothCorner:Clone().Parent = smoothFill
+local FOV = Drawing.new("Circle")
+FOV.Visible = false
+FOV.Transparency = 1
+FOV.Color = AimbotSettings.FOV_Color
+FOV.Thickness = 2.5
+FOV.NumSides = 100
+FOV.Radius = AimbotSettings.FOV
+FOV.Filled = false
 
-local smoothDragging = false
-smoothSlider.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        smoothDragging = true
-    end
-end)
-
-uis.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        smoothDragging = false
-    end
-end)
-
+-- FOV Position am Mauszeiger halten
 RunService.RenderStepped:Connect(function()
-    if smoothDragging then
-        local mousePos = uis:GetMouseLocation()
-        local relX = math.clamp((mousePos.X - smoothSlider.AbsolutePosition.X) / smoothSlider.AbsoluteSize.X, 0, 1)
-        local newVal = math.floor(relX * 200)
-        Aimbot.Strength = newVal
-        smoothFill.Size = UDim2.new(relX, 0, 1, 0)
-        smoothLabel.Text = "Smoothness: " .. newVal
+    FOV.Position = UserInputService:GetMouseLocation()
+end)
+
+-- // Get Target (Universal Aimbot Style) //
+
+local function GetTarget()
+    local mousePos = UserInputService:GetMouseLocation()
+    local closest = nil
+    local bestDist = AimbotSettings.FOV
+
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        if not plr.Character then continue end
+        
+        local Humanoid = plr.Character:FindFirstChild("Humanoid")
+        if not Humanoid or Humanoid.Health <= 0 then continue end
+        
+        if AimbotSettings.TeamCheck and plr.Team == LocalPlayer.Team then continue end
+
+        local part = plr.Character:FindFirstChild(AimbotSettings.AimPart) or plr.Character:FindFirstChild("HumanoidRootPart")
+        if not part then continue end
+
+        local pos = part.Position
+        if AimbotSettings.Prediction then
+            pos = pos + (part.Velocity * AimbotSettings.PredictionAmount)
+        end
+
+        local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
+        if not onScreen then continue end
+
+        -- Distanz zur MAUSPOSITION
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+        if dist >= bestDist then continue end
+
+        -- Distanz-Check (max 250 Studs)
+        local worldDist = (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and 
+                          (LocalPlayer.Character.HumanoidRootPart.Position - pos).Magnitude) or 0
+        if worldDist > AimbotSettings.MaximumDistance then continue end
+
+        if AimbotSettings.VisibleCheck then
+            local rayParams = RaycastParams.new()
+            rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+            rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+            local result = Workspace:Raycast(Camera.CFrame.Position, pos - Camera.CFrame.Position, rayParams)
+            if result and not result.Instance:IsDescendantOf(plr.Character) then continue end
+        end
+
+        bestDist = dist
+        closest = {
+            Position = pos,
+            ScreenPos = Vector2.new(screenPos.X, screenPos.Y),
+            Player = plr
+        }
     end
-end)
+    return closest
+end
 
--- Radius Slider
-local radiusLabel = Instance.new("TextLabel")
-radiusLabel.Size = UDim2.new(1, 0, 0, 25)
-radiusLabel.Position = UDim2.new(0, 0, 0, 120)
-radiusLabel.BackgroundTransparency = 1
-radiusLabel.Text = "Kreis Radius: " .. FovCircle.Radius
-radiusLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
-radiusLabel.Font = Enum.Font.Gotham
-radiusLabel.TextSize = 15
-radiusLabel.Parent = content
+-- // Aimbot Loop (Nur Q Toggle - KEIN Rechtsklick!) //
 
-local radiusSlider = Instance.new("Frame")
-radiusSlider.Size = UDim2.new(1, 0, 0, 12)
-radiusSlider.Position = UDim2.new(0, 0, 0, 150)
-radiusSlider.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-radiusSlider.Parent = content
-
-local radiusFill = Instance.new("Frame")
-radiusFill.Size = UDim2.new(FovCircle.Radius / 400, 0, 1, 0)
-radiusFill.BackgroundColor3 = Color3.fromRGB(255, 140, 80)
-radiusFill.Parent = radiusSlider
-
-local radiusCorner = Instance.new("UICorner")
-radiusCorner.CornerRadius = UDim.new(1, 0)
-radiusCorner.Parent = radiusSlider
-radiusCorner:Clone().Parent = radiusFill
-
-local radiusDragging = false
-radiusSlider.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        radiusDragging = true
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
-    if radiusDragging then
-        local mousePos = uis:GetMouseLocation()
-        local relX = math.clamp((mousePos.X - radiusSlider.AbsolutePosition.X) / radiusSlider.AbsoluteSize.X, 0, 1)
-        local newRadius = math.floor(relX * 350 + 50)
-        FovCircle.Radius = newRadius
-        radiusFill.Size = UDim2.new((newRadius - 50) / 350, 0, 1, 0)
-        radiusLabel.Text = "Kreis Radius: " .. newRadius
-        fov.Radius = newRadius
-    end
-end)
-
-uis.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        radiusDragging = false
-    end
-end)
-
--- Update Kreis Position
-RunService.RenderStepped:Connect(function()
-    fov.Position = uis:GetMouseLocation()
-end)
-
--- Aimbot + AimAssist mit 250 Max + Min 0
 RunService.Heartbeat:Connect(function()
-    fov.Position = uis:GetMouseLocation()
-    fov.Radius = FovCircle.Radius
-    fov.Visible = Aimbot.Enabled
+    -- FOV Updates
+    FOV.Radius = AimbotSettings.FOV
+    FOV.Visible = AimbotSettings.Enabled
+    FOV.Color = AimbotSettings.FOV_Color
 
-    if Aimbot.Enabled then
-        local target = ClosestPlayer()
-        if target and target.Character and target.Character:FindFirstChild(Aimbot.TargetPart) and InFov(target) then
-            local part = target.Character[Aimbot.TargetPart]
-            local dist = (part.Position - camera.CFrame.Position).Magnitude
-            
-            -- Nur aimen, wenn max 250 Studs (Min 0 = alle Entfernungen erlaubt)
-            if dist <= ss.MaximumDistance then
-                local screen = WorldToViewportPoint(camera, part.Position)
-                local mousePos = uis:GetMouseLocation()
-                local deltaX = (screen.X - mousePos.X) * (Aimbot.Strength / 100)
-                local deltaY = (screen.Y - mousePos.Y) * (Aimbot.Strength / 100)
-                mousemoverel(deltaX, deltaY)
-            end
-        end
+    -- NUR aimen wenn Aimbot an ist (KEIN Rechtsklick mehr!)
+    if not AimbotSettings.Enabled then
+        return
     end
 
-    if AimAssist.Enabled then
-        uis.MouseDeltaSensitivity = olddelta * 0.6
-    else
-        uis.MouseDeltaSensitivity = olddelta
+    local target = GetTarget()
+    if target then
+        local mousePos = UserInputService:GetMouseLocation()
+        local deltaX = (target.ScreenPos.X - mousePos.X) * (AimbotSettings.Strength / 100)
+        local deltaY = (target.ScreenPos.Y - mousePos.Y) * (AimbotSettings.Strength / 100)
+        
+        local smoothFactor = 1 / (AimbotSettings.Smoothness or 10)
+        deltaX = deltaX * smoothFactor
+        deltaY = deltaY * smoothFactor
+        
+        local maxMove = 50
+        deltaX = math.clamp(deltaX, -maxMove, maxMove)
+        deltaY = math.clamp(deltaY, -maxMove, maxMove)
+        
+        if deltaX ~= 0 or deltaY ~= 0 then
+            mousemoverel(deltaX, deltaY)
+        end
     end
 end)
 
--- Willkommensnachricht
-game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
-    Text = "[Aimbot] Vollständig geladen – Aimbot nur bis 250 Studs, Min 0 (zielst auf ALLE im Kreis), Smoothness startet bei 5",
-    Color = Color3.fromRGB(180, 255, 180)
+-- // Q Toggle - Aimbot AN/AUS + Circle AN/AUS //
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.Q then
+        AimbotSettings.Enabled = not AimbotSettings.Enabled
+        
+        FOV.Visible = AimbotSettings.Enabled
+        
+        game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", {
+            Text = "[Aimbot] " .. (AimbotSettings.Enabled and "🟢 AKTIVIERT" or "🔴 DEAKTIVIERT") .. " (Q)",
+            Color = AimbotSettings.Enabled and Color3.fromRGB(100,255,100) or Color3.fromRGB(255,100,100)
+        })
+    end
+end)
+
+-- // UI //
+
+Library:Watermark("GiG AIM) | V 2.0")
+local Window = Library:Window("GiG AIM)")
+
+-- // Visuals Tab //
+
+local VisualsTab = Window:Tab("Visuals")
+local EspPage = VisualsTab:SubTab("ESP")
+local ChamsPage = VisualsTab:SubTab("Chams")
+
+-- // ESP Main //
+
+local MasterGroup = EspPage:Groupbox("Activation", "Left")
+MasterGroup:AddToggle({
+    Title = "Enable ESP",
+    Default = false,
+    Callback = function(V) 
+        ESP_Settings.Enabled = V 
+    end
 })
 
-print("[Aimbot] Script vollständig geladen – Q toggelt, Aim nur bis 250 Studs, alle nahen Ziele erlaubt")
+-- // ESP Elements //
 
-getgenv().UAIM = aimbot
-return aimbot
+local ElementsGroup = EspPage:Groupbox("Elements", "Left")
+ElementsGroup:AddToggle({ Title = "Boxes", Default = false, Callback = function(V) ESP_Settings.Box.Enabled = V end })
+ElementsGroup:AddToggle({ Title = "Skeleton", Default = false, Callback = function(V) ESP_Settings.Skeleton.Enabled = V end })
+ElementsGroup:AddToggle({ Title = "Names", Default = false, Callback = function(V) ESP_Settings.Name.Enabled = V end })
+ElementsGroup:AddToggle({ Title = "Health Bar", Default = false, Callback = function(V) ESP_Settings.HealthBar.Enabled = V end })
+ElementsGroup:AddToggle({ Title = "Distance", Default = false, Callback = function(V) ESP_Settings.Distance.Enabled = V end })
+ElementsGroup:AddToggle({ Title = "Tracers", Default = false, Callback = function(V) ESP_Settings.Tracer.Enabled = V end })
+
+-- // ESP Settings //
+
+local EspSettingsGroup = EspPage:Groupbox("Settings", "Right")
+EspSettingsGroup:AddColorPicker({ 
+    Title = "Box Color", 
+    Default = ESP_Settings.Box.Color, 
+    Callback = function(V) ESP_Settings.Box.Color = V end 
+})
+EspSettingsGroup:AddColorPicker({ 
+    Title = "Skeleton Color", 
+    Default = ESP_Settings.Skeleton.Color, 
+    Callback = function(V) ESP_Settings.Skeleton.Color = V end 
+})
+EspSettingsGroup:AddColorPicker({ 
+    Title = "Name Color", 
+    Default = ESP_Settings.Name.Color, 
+    Callback = function(V) ESP_Settings.Name.Color = V end 
+})
+EspSettingsGroup:AddToggle({ 
+    Title = "Box Fill", 
+    Default = false, 
+    Callback = function(V) ESP_Settings.BoxFill.Enabled = V end 
+})
+EspSettingsGroup:AddColorPicker({ 
+    Title = "Fill Color", 
+    Default = ESP_Settings.BoxFill.Color, 
+    Callback = function(V) ESP_Settings.BoxFill.Color = V end 
+})
+EspSettingsGroup:AddSlider({ 
+    Title = "Max Distance", 
+    Min = 100, 
+    Max = 5000, 
+    Default = 2000, 
+    Suffix = " studs", 
+    Callback = function(V) ESP_Settings.LimitDistance = V end 
+})
+
+-- // Chams //
+
+local ChamsGroup = ChamsPage:Groupbox("Chams", "Left")
+ChamsGroup:AddToggle({ 
+    Title = "Enable Chams", 
+    Default = false, 
+    Callback = function(V) ESP_Settings.Chams.Enabled = V end 
+})
+ChamsGroup:AddColorPicker({ 
+    Title = "Fill Color", 
+    Default = ESP_Settings.Chams.FillColor, 
+    Callback = function(V) ESP_Settings.Chams.FillColor = V end 
+})
+ChamsGroup:AddColorPicker({ 
+    Title = "Outline Color", 
+    Default = ESP_Settings.Chams.OutlineColor, 
+    Callback = function(V) ESP_Settings.Chams.OutlineColor = V end 
+})
+
+-- // Aimbot Tab //
+
+local AimbotTab = Window:Tab("Aimbot")
+local Page = AimbotTab:SubTab("Main")
+
+-- // Aimbot Control //
+
+Page:Groupbox("Aimbot Control", "Left"):AddToggle({
+    Title = "Enable Aimbot (Q)",
+    Default = false,
+    Description = "Q toggelt Aimbot + Circle",
+    Callback = function(v) 
+        AimbotSettings.Enabled = v 
+        FOV.Visible = v
+    end
+})
+
+Page:Groupbox("Aimbot Control", "Left"):AddDropdown({
+    Title = "Aim Part",
+    Values = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"},
+    Default = "Head",
+    Callback = function(v) AimbotSettings.AimPart = v end
+})
+
+-- // Aimbot Checks //
+
+Page:Groupbox("Checks", "Left"):AddToggle({
+    Title = "Visible Check (Wall Check)",
+    Default = false,
+    Callback = function(v) AimbotSettings.VisibleCheck = v end
+})
+
+Page:Groupbox("Checks", "Left"):AddToggle({
+    Title = "Team Check",
+    Default = false,
+    Callback = function(v) AimbotSettings.TeamCheck = v end
+})
+
+-- // FOV Settings //
+
+Page:Groupbox("FOV Settings", "Right"):AddSlider({
+    Title = "FOV Size",
+    Min = 10, Max = 600, Default = 160,
+    Callback = function(v)
+        AimbotSettings.FOV = v
+    end
+})
+
+Page:Groupbox("FOV Settings", "Right"):AddColorPicker({
+    Title = "FOV Color",
+    Default = AimbotSettings.FOV_Color,
+    Callback = function(v)
+        AimbotSettings.FOV_Color = v
+    end
+})
+
+-- // Aimbot Smoothness //
+
+Page:Groupbox("Smoothness", "Left"):AddSlider({
+    Title = "Smoothness",
+    Min = 1, Max = 50, Default = 10,
+    Suffix = " (lower = sharper)",
+    Callback = function(v) AimbotSettings.Smoothness = v end
+})
+
+Page:Groupbox("Smoothness", "Left"):AddSlider({
+    Title = "Strength",
+    Min = 1, Max = 100, Default = 5,
+    Suffix = "%",
+    Callback = function(v) AimbotSettings.Strength = v end
+})
+
+-- // Distance Settings //
+
+Page:Groupbox("Distance", "Left"):AddSlider({
+    Title = "Max Distance",
+    Min = 50, Max = 500, Default = 250,
+    Suffix = " studs",
+    Callback = function(v) AimbotSettings.MaximumDistance = v end
+})
+
+-- // Prediction //
+
+Page:Groupbox("Prediction", "Left"):AddToggle({
+    Title = "Enable Prediction",
+    Default = false,
+    Callback = function(v) AimbotSettings.Prediction = v end
+})
+
+Page:Groupbox("Prediction", "Left"):AddSlider({
+    Title = "Prediction Amount",
+    Min = 0.05, Max = 0.5, Default = 0.142,
+    Suffix = " (lower = more accurate)",
+    Callback = function(v) AimbotSettings.PredictionAmount = v end
+})
+
+-- // Settings Tab //
+
+Window:Section("System")
+local SettingsTab = Window:Tab("Settings")
+local SettingsPage = SettingsTab:SubTab("Menu Settings")
+
+-- // Config Manager //
+
+local ConfigGroup = SettingsPage:Groupbox("Configuration", "Left")
+local Configs = Library:GetConfigs()
+
+ConfigGroup:AddDropdown({
+    Title = "Select Config",
+    Values = Configs,
+    Default = "default",
+    Multi = false,
+    Flag = "SelectedConfig",
+    Callback = function(Value) end
+})
+
+ConfigGroup:AddTextbox({
+    Title = "New Config Name",
+    Placeholder = "Type name...",
+    Flag = "NewConfigName",
+    Callback = function(Value) end
+})
+
+ConfigGroup:AddButton({
+    Title = "Load Selected",
+    Callback = function()
+        local name = Library.Flags["SelectedConfig"]
+        if name then
+            Library:LoadConfig(name)
+            Library:Notify("Success", "Config loaded: " .. name, 3)
+        else
+            Library:Notify("Error", "No config selected!", 3)
+        end
+    end
+})
+
+ConfigGroup:AddButton({
+    Title = "Save Config",
+    Callback = function()
+        local name = Library.Flags["NewConfigName"]
+        if name == "" or name == nil then name = Library.Flags["SelectedConfig"] end
+        if name and name ~= "" then
+            Library:SaveConfig(name)
+            local NewList = Library:GetConfigs()
+            if Library.Items["SelectedConfig"] then Library.Items["SelectedConfig"].Refresh(NewList) end
+            Library:Notify("Success", "Config saved: " .. name, 3)
+        else
+            Library:Notify("Error", "Enter a name or select a config!", 3)
+        end
+    end
+})
+
+ConfigGroup:AddButton({
+    Title = "Delete Config",
+    Callback = function()
+        local name = Library.Flags["SelectedConfig"]
+        if name and name ~= "" then
+            Library:DeleteConfig(name)
+            local NewList = Library:GetConfigs()
+            if Library.Items["SelectedConfig"] then 
+                Library.Items["SelectedConfig"].Refresh(NewList) 
+            end
+            Library.Flags["SelectedConfig"] = nil
+            Library:Notify("Success", "Config deleted: " .. name, 3)
+        else
+            Library:Notify("Error", "Select a config first!", 3)
+        end
+    end
+})
+
+ConfigGroup:AddButton({
+    Title = "Refresh List",
+    Callback = function()
+        local NewList = Library:GetConfigs()
+        if Library.Items["SelectedConfig"] then Library.Items["SelectedConfig"].Refresh(NewList) end
+        Library:Notify("Configs", "List refreshed", 2)
+    end
+})
+
+-- // Theme Manager //
+
+local ThemeGroup = SettingsPage:Groupbox("Theme Manager", "Right")
+
+local ThemeList = {}
+if Library.ThemePresets then
+    for ThemeName, _ in pairs(Library.ThemePresets) do
+        table.insert(ThemeList, ThemeName)
+    end
+    table.sort(ThemeList)
+    
+    ThemeGroup:AddDropdown({
+        Title = "Preset Theme",
+        Values = ThemeList,
+        Default = "Default",
+        Multi = false,
+        Callback = function(Value)
+            if Library.SetTheme then
+                Library:SetTheme(Value)
+            else
+                warn("Library is outdated, SetTheme missing!")
+            end
+        end
+    })
+    ThemeGroup:AddSeparator()
+end
+
+ThemeGroup:AddLabel("Custom Colors")
+
+ThemeGroup:AddColorPicker({
+    Title = "Accent Color", Default = Library.Theme.Accent, Flag = "ThemeAccent",
+    Callback = function(Value) Library:UpdateTheme("Accent", Value) end
+})
+
+ThemeGroup:AddColorPicker({
+    Title = "Background", Default = Library.Theme.Background, Flag = "ThemeBackground",
+    Callback = function(Value) Library:UpdateTheme("Background", Value) end
+})
+
+ThemeGroup:AddColorPicker({
+    Title = "Sidebar", Default = Library.Theme.Sidebar, Flag = "ThemeSidebar",
+    Callback = function(Value) Library:UpdateTheme("Sidebar", Value) end
+})
+
+ThemeGroup:AddColorPicker({
+    Title = "Groupbox", Default = Library.Theme.Groupbox, Flag = "ThemeGroupbox",
+    Callback = function(Value) Library:UpdateTheme("Groupbox", Value) end
+})
+
+ThemeGroup:AddLabel("Text & Outlines")
+
+ThemeGroup:AddColorPicker({
+    Title = "Main Text", Default = Library.Theme.Text, Flag = "ThemeText",
+    Callback = function(Value) Library:UpdateTheme("Text", Value) end
+})
+
+ThemeGroup:AddColorPicker({
+    Title = "Secondary Text", Default = Library.Theme.TextDark, Flag = "ThemeTextDark",
+    Callback = function(Value) Library:UpdateTheme("TextDark", Value) end
+})
+
+ThemeGroup:AddColorPicker({
+    Title = "Outline/Stroke", Default = Library.Theme.Outline, Flag = "ThemeOutline",
+    Callback = function(Value) Library:UpdateTheme("Outline", Value) end
+})
+
+ThemeGroup:AddButton({
+    Title = "Reset Theme to Default",
+    Callback = function()
+        Library:SetTheme("Default")
+        Library:Notify("Theme", "Colors reset to default", 2)
+    end
+})
+    
+-- // UI Settings //
+
+local UISettings = SettingsPage:Groupbox("UI Settings", "Right")
+
+UISettings:AddToggle({
+    Title = "Show Watermark",
+    Default = true,
+    Flag = "WatermarkToggle",
+    Callback = function(Value)
+        Library.WatermarkSettings.Enabled = Value
+    end
+})
+
+UISettings:AddTextbox({
+    Title = "Watermark Text",
+    Default = "GiG AIM V2",
+    Placeholder = "Enter text...",
+    ClearOnFocus = false,
+    Callback = function(Value)
+        Library.WatermarkSettings.Text = Value
+    end
+})
+
+UISettings:AddButton({
+    Title = "Unload / Destroy UI",
+    Callback = function()
+        FOV:Remove()
+        Library:Destroy()
+    end
+})
+
+print("GiG AIM) + Universal Aimbot loaded successfully!")
+print("Q toggles Aimbot ON/OFF + Circle ON/OFF (NO RIGHT CLICK NEEDED!)")
